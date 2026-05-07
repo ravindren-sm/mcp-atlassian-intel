@@ -35,9 +35,9 @@ PATs are long-lived API keys that survive SSO session expiry.
 1. Log into **[https://wiki.ith.intel.com](https://wiki.ith.intel.com)**
 2. Click your **profile picture** (top-right corner)
 3. Select **Profile** from the dropdown
-4. Click **Settings** (left sidebar)
-5. Click **Personal Access Tokens** (left sidebar, under Settings)
-6. Click **Create Token** (left sidebar)
+4. Click **Settings**
+5. Click **Personal Access Tokens** (left sidebar)
+6. Click the **Create Token** button
 7. Give it a descriptive name, e.g. `Claude Code MCP`
 8. Leave the expiry as-is (or set one if required by your org policy)
 9. Click **Create** and **copy the token immediately** — it will not be shown again
