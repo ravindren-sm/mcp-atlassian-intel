@@ -1,71 +1,59 @@
 # mcp-atlassian — Intel Internal Edition
 
 Fork of [sooperset/mcp-atlassian](https://github.com/sooperset/mcp-atlassian) with a patch
-for Intel's corporate proxy environment. Provides Claude Code with native read/write access
-to Intel's internal Confluence wiki and Jira.
+for Intel's corporate proxy environment. Gives Claude Code native access to
+**wiki.ith.intel.com** — search, read, create, and update wiki pages directly from Claude.
 
 ## What's Different from Upstream
 
 Intel's corporate proxy (`proxy-chain.intel.com:911`) intercepts outbound HTTPS. The standard
 `mcp-atlassian` server ignores the `NO_PROXY` environment variable when proxies are explicitly
-configured on the session, causing all requests to internal hosts to be routed through the proxy
-and fail.
+configured on the session, routing internal traffic through the proxy and failing.
 
 This fork patches `src/mcp_atlassian/utils/ssl.py` to add:
 
-- **`NoProxyAdapter`** — an `HTTPAdapter` that correctly respects `NO_PROXY` even when the
-  session has explicit proxy settings
+- **`NoProxyAdapter`** — respects `NO_PROXY` even when proxies are explicitly set on the session
 - **`configure_proxy_bypass()`** — mounts the adapter for a given service URL
-- **`SSLIgnoreAdapter`** now inherits from `NoProxyAdapter`, so SSL bypass and proxy bypass
-  work together
+- **`SSLIgnoreAdapter`** now inherits from `NoProxyAdapter` so SSL bypass and proxy bypass work together
 
 ---
 
 ## Prerequisites
 
 - Python 3.10+
-- `uv` package manager: `pip install uv` (provides `uvx` and `uv tool install`)
+- `uv` package manager: `pip install uv`
 - Git
-- Access to `wiki.ith.intel.com` (requires Intel network or VPN)
+- Intel network or VPN access to `wiki.ith.intel.com`
 
 ---
 
-## Authentication Setup
+## Step 1 — Get an Intel Confluence Personal Access Token
 
-### Confluence Personal Access Token (PAT)
+The MCP server authenticates with a **Personal Access Token (PAT)**, not your SSO password.
+PATs are long-lived API keys that survive SSO session expiry.
 
-This tool uses a **Personal Access Token**, not your regular Confluence password.
-PATs are long-lived API credentials that don't expire with SSO.
+1. Log into **[https://wiki.ith.intel.com](https://wiki.ith.intel.com)**
+2. Click your **profile picture** (top-right corner)
+3. Select **Profile** from the dropdown
+4. In the left sidebar, click **Personal Access Tokens**
+5. Click **Create Token**
+6. Give it a descriptive name, e.g. `Claude Code MCP`
+7. Leave the expiry as-is (or set one if required by your org policy)
+8. Click **Create** and **copy the token immediately** — it will not be shown again
 
-1. Go to **https://wiki.ith.intel.com**
-2. Click your profile icon (top right) → **Profile**
-3. Click **Personal Access Tokens** → **Create Token**
-4. Give it a name (e.g. `Claude Code MCP`)
-5. Copy the token — you won't see it again
-
-> Store it securely. Do not commit it to any repository.
-
-### Jira Personal Access Token (optional)
-
-For Jira access (`jira.devtools.intel.com`):
-
-1. Go to **https://jira.devtools.intel.com**
-2. Profile → **Personal Access Tokens** → **Create Token**
+> Keep this token private. Do not commit it to any file or repository.
 
 ---
 
-## Installation
+## Step 2 — Install the Server
 
 ```bash
-# Clone this repo
 git clone https://github.com/ravindren-sm/mcp-atlassian-intel.git
 cd mcp-atlassian-intel
-
-# Install as a persistent uv tool (fast startup — no per-session install overhead)
 uv tool install --from . mcp-atlassian
 ```
 
-Verify installation:
+Verify:
 
 ```bash
 mcp-atlassian --help
@@ -73,26 +61,54 @@ mcp-atlassian --help
 
 ---
 
-## Running the Server
+## Step 3 — Create the Startup Script
 
-Run in **HTTP mode** (recommended) so Claude Code connects instantly without Python cold-start delay:
+Create a file called **`start-atlassian-mcp.vbs`** in your home directory
+(`C:\Users\<your-username>\start-atlassian-mcp.vbs`).
+
+**Do not commit this file — it contains your PAT.**
+
+```vbs
+Dim WshShell
+Set WshShell = CreateObject("WScript.Shell")
+
+' Set credentials only for this process — not system-wide
+WshShell.Environment("Process")("CONFLUENCE_URL") = "https://wiki.ith.intel.com"
+WshShell.Environment("Process")("CONFLUENCE_PERSONAL_TOKEN") = "<paste-your-pat-here>"
+WshShell.Environment("Process")("CONFLUENCE_SSL_VERIFY") = "false"
+WshShell.Environment("Process")("NO_PROXY") = "wiki.ith.intel.com"
+
+' Launch the server silently on port 8765 (0 = hidden window, False = don't wait)
+WshShell.Run """C:\Users\<your-username>\.local\bin\mcp-atlassian.exe"" --transport streamable-http --port 8765", 0, False
+
+Set WshShell = Nothing
+```
+
+Replace `<paste-your-pat-here>` and `<your-username>` with your values.
+
+---
+
+## Step 4 — Register for Auto-Start at Logon
+
+Run this in **PowerShell** once to register the script as a Task Scheduler job:
+
+```powershell
+$action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "C:\Users\$env:USERNAME\start-atlassian-mcp.vbs"
+$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Seconds 0) -MultipleInstances IgnoreNew
+Register-ScheduledTask -TaskName 'Atlassian MCP Server' -Action $action -Trigger $trigger -Settings $settings -Force
+```
+
+The server will start silently in the background on every Windows logon.
+
+To start it manually without logging off:
 
 ```bash
-# Set your credentials
-set CONFLUENCE_URL=https://wiki.ith.intel.com
-set CONFLUENCE_PERSONAL_TOKEN=<your-confluence-pat>
-set CONFLUENCE_SSL_VERIFY=false
-set JIRA_URL=https://jira.devtools.intel.com
-set JIRA_PERSONAL_TOKEN=<your-jira-pat>
-set JIRA_AUTH_TYPE=bearer
-set JIRA_SSL_VERIFY=false
-set NO_PROXY=.devtools.intel.com,wiki.ith.intel.com
-
-# Start server
-mcp-atlassian --transport streamable-http --port 8765
+wscript.exe C:\Users\<your-username>\start-atlassian-mcp.vbs
 ```
 
 Health check:
+
 ```bash
 curl http://localhost:8765/healthz
 # Expected: {"status":"ok"}
@@ -100,15 +116,15 @@ curl http://localhost:8765/healthz
 
 ---
 
-## Claude Code Integration
+## Step 5 — Connect Claude Code
 
-Register the server once (user-scoped, available in all projects):
+Run once to register the server (user-scoped, applies to all projects):
 
 ```bash
 claude mcp add -s user --transport http atlassian-mcp http://localhost:8765/mcp
 ```
 
-Verify:
+Verify connection (server must be running first):
 
 ```bash
 claude mcp list
@@ -117,77 +133,31 @@ claude mcp list
 
 ---
 
-## Auto-Start at Windows Logon (Task Scheduler)
-
-Create a VBScript launcher that sets credentials and starts the server silently:
-
-**`start-atlassian-mcp.vbs`** (do not commit — contains credentials):
-
-```vbs
-Dim WshShell
-Set WshShell = CreateObject("WScript.Shell")
-
-WshShell.Environment("Process")("CONFLUENCE_URL") = "https://wiki.ith.intel.com"
-WshShell.Environment("Process")("CONFLUENCE_PERSONAL_TOKEN") = "<your-pat>"
-WshShell.Environment("Process")("CONFLUENCE_SSL_VERIFY") = "false"
-WshShell.Environment("Process")("JIRA_URL") = "https://jira.devtools.intel.com"
-WshShell.Environment("Process")("JIRA_SSL_VERIFY") = "false"
-WshShell.Environment("Process")("NO_PROXY") = ".devtools.intel.com,wiki.ith.intel.com"
-
-' 0 = hidden window, False = don't wait for exit
-WshShell.Run """C:\Users\<username>\.local\bin\mcp-atlassian.exe"" --transport streamable-http --port 8765", 0, False
-
-Set WshShell = Nothing
-```
-
-Register as a scheduled task (PowerShell):
-
-```powershell
-$action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument 'C:\Users\<username>\start-atlassian-mcp.vbs'
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Seconds 0) -MultipleInstances IgnoreNew
-Register-ScheduledTask -TaskName 'Atlassian MCP Server' -Action $action -Trigger $trigger -Settings $settings -Force
-```
-
-Replace `<username>` and `<your-pat>` with your values.
-
----
-
-## Example Claude Prompts
-
-Once connected, you can talk to Claude naturally:
-
-```
-Search Confluence for pages about "NVL binning strategy"
-Get the content of Confluence page with ID 3167956975
-Find all pages in the ITSpdxtp space modified in the last 7 days
-List child pages of page ID 3167956975
-Add a comment to page ID 4545578836 saying "Updated with latest findings"
-```
-
----
-
 ## Troubleshooting
 
-**`✗ Failed to connect` in `claude mcp list`**
-The server isn't running. Run the VBScript or start the server manually, then check `curl http://localhost:8765/healthz`.
+**`✗ Failed to connect`**
+The server is not running. Run the VBScript or check Task Scheduler. Then verify with
+`curl http://localhost:8765/healthz`.
 
 **`401 Unauthorized`**
-Your PAT has expired. Create a new one in Confluence/Jira.
+Your PAT has expired or is wrong. Create a new one at
+[wiki.ith.intel.com → Profile → Personal Access Tokens](https://wiki.ith.intel.com).
 
 **`Failed to resolve 'wiki.ith.intel.com'`**
-You're not on Intel network or VPN.
+You are not on Intel network or VPN.
 
-**SSL errors**
-Ensure `CONFLUENCE_SSL_VERIFY=false` is set. Intel's network does SSL inspection.
+**SSL certificate errors**
+Ensure `CONFLUENCE_SSL_VERIFY=false` is set in the VBScript. Intel's network performs SSL
+inspection with an internal CA that Python does not trust by default.
 
 ---
 
 ## Updating from Upstream
 
 ```bash
-git stash          # stash the Intel patch
+cd mcp-atlassian-intel
+git stash           # stash Intel patch changes
 git pull origin main
-git stash pop      # re-apply patch
-# If conflicts, manually re-apply src/mcp_atlassian/utils/ssl.py changes
+git stash pop       # re-apply
+# If ssl.py has conflicts, re-apply the changes from intel_noproxy.patch manually
 ```
