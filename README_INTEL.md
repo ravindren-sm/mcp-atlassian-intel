@@ -46,6 +46,20 @@ PATs are long-lived API keys that survive SSO session expiry.
 
 ---
 
+## Let Claude Code Do the Rest
+
+Once you have your PAT, paste the following prompt into Claude Code and it will complete Steps 2–5 for you:
+
+```
+Set up the mcp-atlassian-intel server on my machine. 
+
+Clone https://github.com/ravindren-sm/mcp-atlassian-intel, install it using uv (with the Intel proxy), create the startup VBScript in my home directory using the PAT below, register it as a Windows Task Scheduler job so it starts at logon, start it now, and register it with Claude Code.
+
+My Confluence PAT: <paste your token here>
+```
+
+---
+
 ## Step 2 — Install the Server
 
 **Install `uv`** (the package manager used to install and run the server):
