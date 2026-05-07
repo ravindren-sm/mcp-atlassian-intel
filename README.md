@@ -35,17 +35,26 @@ PATs are long-lived API keys that survive SSO session expiry.
 1. Log into **[https://wiki.ith.intel.com](https://wiki.ith.intel.com)**
 2. Click your **profile picture** (top-right corner)
 3. Select **Profile** from the dropdown
-4. In the left sidebar, click **Personal Access Tokens**
-5. Click **Create Token**
-6. Give it a descriptive name, e.g. `Claude Code MCP`
-7. Leave the expiry as-is (or set one if required by your org policy)
-8. Click **Create** and **copy the token immediately** — it will not be shown again
+4. Click **Settings** (left sidebar)
+5. Click **Personal Access Tokens** (left sidebar, under Settings)
+6. Click **Create Token** (left sidebar)
+7. Give it a descriptive name, e.g. `Claude Code MCP`
+8. Leave the expiry as-is (or set one if required by your org policy)
+9. Click **Create** and **copy the token immediately** — it will not be shown again
 
 > Keep this token private. Do not commit it to any file or repository.
 
 ---
 
 ## Step 2 — Install the Server
+
+First, install `uv` if you don't have it (it provides the `uvx` and `uv tool install` commands):
+
+```bash
+pip install uv --proxy="http://proxy-chain.intel.com:911"
+```
+
+Then clone and install:
 
 ```bash
 git clone https://github.com/ravindren-sm/mcp-atlassian-intel.git
