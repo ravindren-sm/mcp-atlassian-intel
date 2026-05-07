@@ -1,110 +1,163 @@
-# MCP Atlassian
+# mcp-atlassian — Intel Internal Edition
 
-![PyPI Version](https://img.shields.io/pypi/v/mcp-atlassian)
-![PyPI - Downloads](https://img.shields.io/pypi/dm/mcp-atlassian)
-![PePy - Total Downloads](https://static.pepy.tech/personalized-badge/mcp-atlassian?period=total&units=international_system&left_color=grey&right_color=blue&left_text=Total%20Downloads)
-[![Run Tests](https://github.com/sooperset/mcp-atlassian/actions/workflows/tests.yml/badge.svg)](https://github.com/sooperset/mcp-atlassian/actions/workflows/tests.yml)
-![License](https://img.shields.io/github/license/sooperset/mcp-atlassian)
-[![Docs](https://img.shields.io/badge/docs-mintlify-blue)](https://mcp-atlassian.soomiles.com)
+Fork of [sooperset/mcp-atlassian](https://github.com/sooperset/mcp-atlassian) with a patch
+for Intel's corporate proxy environment. Gives Claude Code native access to
+**wiki.ith.intel.com** — search, read, create, and update wiki pages directly from Claude.
 
-Model Context Protocol (MCP) server for Atlassian products (Confluence and Jira). Supports both Cloud and Server/Data Center deployments.
+## What's Different from Upstream
 
-https://github.com/user-attachments/assets/35303504-14c6-4ae4-913b-7c25ea511c3e
+Intel's corporate proxy (`proxy-chain.intel.com:911`) intercepts outbound HTTPS. The standard
+`mcp-atlassian` server ignores the `NO_PROXY` environment variable when proxies are explicitly
+configured on the session, routing internal traffic through the proxy and failing.
 
-<details>
-<summary>Confluence Demo</summary>
+This fork patches `src/mcp_atlassian/utils/ssl.py` to add:
 
-https://github.com/user-attachments/assets/7fe9c488-ad0c-4876-9b54-120b666bb785
+- **`NoProxyAdapter`** — respects `NO_PROXY` even when proxies are explicitly set on the session
+- **`configure_proxy_bypass()`** — mounts the adapter for a given service URL
+- **`SSLIgnoreAdapter`** now inherits from `NoProxyAdapter` so SSL bypass and proxy bypass work together
 
-</details>
+---
 
-## Quick Start
+## Prerequisites
 
-### 1. Get Your API Token
+- Python 3.10+
+- `uv` package manager: `pip install uv`
+- Git
+- Intel network or VPN access to `wiki.ith.intel.com`
 
-Go to https://id.atlassian.com/manage-profile/security/api-tokens and create a token.
+---
 
-> For Server/Data Center, use a Personal Access Token instead. See [Authentication](https://mcp-atlassian.soomiles.com/docs/authentication).
+## Step 1 — Get an Intel Confluence Personal Access Token
 
-### 2. Configure Your IDE
+The MCP server authenticates with a **Personal Access Token (PAT)**, not your SSO password.
+PATs are long-lived API keys that survive SSO session expiry.
 
-Add to your Claude Desktop or Cursor MCP configuration:
+1. Log into **[https://wiki.ith.intel.com](https://wiki.ith.intel.com)**
+2. Click your **profile picture** (top-right corner)
+3. Select **Profile** from the dropdown
+4. In the left sidebar, click **Personal Access Tokens**
+5. Click **Create Token**
+6. Give it a descriptive name, e.g. `Claude Code MCP`
+7. Leave the expiry as-is (or set one if required by your org policy)
+8. Click **Create** and **copy the token immediately** — it will not be shown again
 
-```json
-{
-  "mcpServers": {
-    "mcp-atlassian": {
-      "command": "uvx",
-      "args": ["mcp-atlassian"],
-      "env": {
-        "JIRA_URL": "https://your-company.atlassian.net",
-        "JIRA_USERNAME": "your.email@company.com",
-        "JIRA_API_TOKEN": "your_api_token",
-        "CONFLUENCE_URL": "https://your-company.atlassian.net/wiki",
-        "CONFLUENCE_USERNAME": "your.email@company.com",
-        "CONFLUENCE_API_TOKEN": "your_api_token"
-      }
-    }
-  }
-}
+> Keep this token private. Do not commit it to any file or repository.
+
+---
+
+## Step 2 — Install the Server
+
+```bash
+git clone https://github.com/ravindren-sm/mcp-atlassian-intel.git
+cd mcp-atlassian-intel
+uv tool install --from . mcp-atlassian
 ```
 
-> **Server/Data Center users**: Use `JIRA_PERSONAL_TOKEN` instead of `JIRA_USERNAME` + `JIRA_API_TOKEN`. See [Authentication](https://mcp-atlassian.soomiles.com/docs/authentication) for details.
+Verify:
 
-### 3. Start Using
+```bash
+mcp-atlassian --help
+```
 
-Ask your AI assistant to:
-- **"Find issues assigned to me in PROJ project"**
-- **"Search Confluence for onboarding docs"**
-- **"Create a bug ticket for the login issue"**
-- **"Update the status of PROJ-123 to Done"**
+---
 
-## Documentation
+## Step 3 — Create the Startup Script
 
-Full documentation is available at **[mcp-atlassian.soomiles.com](https://mcp-atlassian.soomiles.com)**.
+Create a file called **`start-atlassian-mcp.vbs`** in your home directory
+(`C:\Users\<your-username>\start-atlassian-mcp.vbs`).
 
-Documentation is also available in [llms.txt format](https://llmstxt.org/), which LLMs can consume easily:
-- [`llms.txt`](https://mcp-atlassian.soomiles.com/llms.txt) — documentation sitemap
-- [`llms-full.txt`](https://mcp-atlassian.soomiles.com/llms-full.txt) — complete documentation
+**Do not commit this file — it contains your PAT.**
 
-| Topic | Description |
-|-------|-------------|
-| [Installation](https://mcp-atlassian.soomiles.com/docs/installation) | uvx, Docker, pip, from source |
-| [Authentication](https://mcp-atlassian.soomiles.com/docs/authentication) | API tokens, PAT, OAuth 2.0 |
-| [Configuration](https://mcp-atlassian.soomiles.com/docs/configuration) | IDE setup, environment variables |
-| [HTTP Transport](https://mcp-atlassian.soomiles.com/docs/http-transport) | SSE, streamable-http, multi-user |
-| [Tools Reference](https://mcp-atlassian.soomiles.com/docs/tools-reference) | All Jira & Confluence tools |
-| [Troubleshooting](https://mcp-atlassian.soomiles.com/docs/troubleshooting) | Common issues & debugging |
+```vbs
+Dim WshShell
+Set WshShell = CreateObject("WScript.Shell")
 
-## Compatibility
+' Set credentials only for this process — not system-wide
+WshShell.Environment("Process")("CONFLUENCE_URL") = "https://wiki.ith.intel.com"
+WshShell.Environment("Process")("CONFLUENCE_PERSONAL_TOKEN") = "<paste-your-pat-here>"
+WshShell.Environment("Process")("CONFLUENCE_SSL_VERIFY") = "false"
+WshShell.Environment("Process")("NO_PROXY") = "wiki.ith.intel.com"
 
-| Product | Deployment | Support |
-|---------|------------|---------|
-| Confluence | Cloud | Fully supported |
-| Confluence | Server/Data Center | Supported (v6.0+) |
-| Jira | Cloud | Fully supported |
-| Jira | Server/Data Center | Supported (v8.14+) |
+' Launch the server silently on port 8765 (0 = hidden window, False = don't wait)
+WshShell.Run """C:\Users\<your-username>\.local\bin\mcp-atlassian.exe"" --transport streamable-http --port 8765", 0, False
 
-## Key Tools
+Set WshShell = Nothing
+```
 
-| Jira | Confluence |
-|------|------------|
-| `jira_search` - Search with JQL | `confluence_search` - Search with CQL |
-| `jira_get_issue` - Get issue details | `confluence_get_page` - Get page content |
-| `jira_create_issue` - Create issues | `confluence_create_page` - Create pages |
-| `jira_update_issue` - Update issues | `confluence_update_page` - Update pages |
-| `jira_transition_issue` - Change status | `confluence_add_comment` - Add comments |
+Replace `<paste-your-pat-here>` and `<your-username>` with your values.
 
-**72 tools total** — See [Tools Reference](https://mcp-atlassian.soomiles.com/docs/tools-reference) for the complete list.
+---
 
-## Security
+## Step 4 — Register for Auto-Start at Logon
 
-Never share API tokens. Keep `.env` files secure. See [SECURITY.md](SECURITY.md).
+Run this in **PowerShell** once to register the script as a Task Scheduler job:
 
-## Contributing
+```powershell
+$action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "C:\Users\$env:USERNAME\start-atlassian-mcp.vbs"
+$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Seconds 0) -MultipleInstances IgnoreNew
+Register-ScheduledTask -TaskName 'Atlassian MCP Server' -Action $action -Trigger $trigger -Settings $settings -Force
+```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup.
+The server will start silently in the background on every Windows logon.
 
-## License
+To start it manually without logging off:
 
-MIT - See [LICENSE](LICENSE). Not an official Atlassian product.
+```bash
+wscript.exe C:\Users\<your-username>\start-atlassian-mcp.vbs
+```
+
+Health check:
+
+```bash
+curl http://localhost:8765/healthz
+# Expected: {"status":"ok"}
+```
+
+---
+
+## Step 5 — Connect Claude Code
+
+Run once to register the server (user-scoped, applies to all projects):
+
+```bash
+claude mcp add -s user --transport http atlassian-mcp http://localhost:8765/mcp
+```
+
+Verify connection (server must be running first):
+
+```bash
+claude mcp list
+# Expected: atlassian-mcp: http://localhost:8765/mcp (HTTP) - ✓ Connected
+```
+
+---
+
+## Troubleshooting
+
+**`✗ Failed to connect`**
+The server is not running. Run the VBScript or check Task Scheduler. Then verify with
+`curl http://localhost:8765/healthz`.
+
+**`401 Unauthorized`**
+Your PAT has expired or is wrong. Create a new one at
+[wiki.ith.intel.com → Profile → Personal Access Tokens](https://wiki.ith.intel.com).
+
+**`Failed to resolve 'wiki.ith.intel.com'`**
+You are not on Intel network or VPN.
+
+**SSL certificate errors**
+Ensure `CONFLUENCE_SSL_VERIFY=false` is set in the VBScript. Intel's network performs SSL
+inspection with an internal CA that Python does not trust by default.
+
+---
+
+## Updating from Upstream
+
+```bash
+cd mcp-atlassian-intel
+git stash           # stash Intel patch changes
+git pull origin main
+git stash pop       # re-apply
+# If ssl.py has conflicts, re-apply the changes from intel_noproxy.patch manually
+```
