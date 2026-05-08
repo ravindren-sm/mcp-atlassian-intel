@@ -177,14 +177,13 @@ tools in every session — no special commands needed. Just describe what you wa
 
 ### Skills
 
-Two dedicated Claude Code skills wrap the most common workflows:
+A dedicated Claude Code skill wraps the most common read workflow:
 
 | Skill | What it does |
 | --- | --- |
-|  | Ask a question — Claude searches wiki.ith.intel.com and summarises the answer |
-|  | Save one or more wiki pages (or a full page tree) to local Markdown files |
+| `/wiki-query` | Ask a question — Claude searches wiki.ith.intel.com and summarises the answer |
 
-Invoke them by typing the slash command in the Claude Code prompt.
+Invoke it by typing `/wiki-query` followed by your question in the Claude Code prompt.
 
 ### Example prompts
 
@@ -212,32 +211,24 @@ Create a new wiki page in the MYSPACE space titled "Q3 Review Notes" with the fo
 Update the page at https://wiki.ith.intel.com/pages/viewpage.action?pageId=12345678 to add a new section called "2026 Update" with this content: ...
 ```
 
-**Download for offline use**
-```
-/wiki-download https://wiki.ith.intel.com/display/BIBigData/Cloud+Data+Platform
-```
-```
-Download the full ECDW space page tree to ./docs/ecdw/
-```
-
 ### Available Confluence tools
 
 The MCP exposes these tools directly to Claude (visible via `claude mcp list --verbose`):
 
 | Tool | Description |
 | --- | --- |
-|  | Full-text and CQL search across all spaces |
-|  | Read a page by ID or title + space key |
-|  | List child pages and folders |
-|  | Create a new page (Markdown, wiki, or storage format) |
-|  | Edit an existing page |
-|  | Add a comment to a page |
-|  | Read comments on a page |
-|  | Attach a file to a page |
-|  | List attachments on a page |
-|  | See what changed between two page versions |
-|  | Get a space's full page hierarchy |
-|  | Look up Intel colleagues by name |
+| `confluence_search` | Full-text and CQL search across all spaces |
+| `confluence_get_page` | Read a page by ID or title + space key |
+| `confluence_get_page_children` | List child pages and folders |
+| `confluence_create_page` | Create a new page (Markdown, wiki, or storage format) |
+| `confluence_update_page` | Edit an existing page |
+| `confluence_add_comment` | Add a comment to a page |
+| `confluence_get_comments` | Read comments on a page |
+| `confluence_upload_attachment` | Attach a file to a page |
+| `confluence_get_attachments` | List attachments on a page |
+| `confluence_get_page_diff` | See what changed between two page versions |
+| `confluence_get_space_page_tree` | Get a space's full page hierarchy |
+| `confluence_search_user` | Look up Intel colleagues by name |
 
 > **Read-only mode**: Set `CONFLUENCE_READ_ONLY=true` in the VBScript to prevent Claude from
 > creating or modifying pages. Useful for sharing the server with colleagues who should only have
